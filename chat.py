@@ -2,9 +2,21 @@ import openai
 import os # for open , close and save file
 import tkinter as tk
 from tkinter import ttk
+import numpy as np
+import whisper
+import pyaudio
+import wave
+import ssl
+import numba
+ssl._create_default_https_context = ssl._create_unverified_context
+
+
+# add the voice library
+import speech_recognition as sr
+
 
 # Set up OpenAI API credentials
-openai.api_key = "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"
+openai.api_key = "" #put you api key here
 
 language_translations = {
     'English': {'text': 'Enter Text:', 'source_lang': 'I Speak:', 'target_lang': 'Translate To:', 'translate': 'Translate', 'swap': 'Swap'},
@@ -18,6 +30,68 @@ language_translations = {
     'Portuguese': {'text': 'Digite o texto:', 'source_lang': 'Eu falo:', 'target_lang': 'Traduzir para:', 'translate': 'Traduzir', 'swap': 'Trocar'},
     'Hindi': {'text': 'पाठ डालें:', 'source_lang': 'मैं बोलता हूँ:', 'target_lang': 'अनुवाद करें:', 'translate': 'अनुवाद करना', 'swap': 'अदला बदली करें'},
 }
+
+
+
+
+
+def on_speech_to_text_click():
+    # Recording parameters
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 44100
+    CHUNK = 1024
+    RECORD_SECONDS = 5
+    WAVE_OUTPUT_FILENAME = "audio.wav"
+
+    audio = pyaudio.PyAudio()
+
+    log_output.insert(tk.END, "Recording...")
+
+    # Start recording
+    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+    frames = []
+    for _ in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+        data = stream.read(CHUNK)
+        frames.append(data)
+
+    log_output.insert(tk.END, "Recording complete!")
+
+    # Stop and close the stream
+    stream.stop_stream()
+    stream.close()
+    audio.terminate()
+
+    # Save as WAV
+    with wave.open(WAVE_OUTPUT_FILENAME, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(audio.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+
+    # Load P model
+    model = whisper.load_model("base")
+
+    # Transcribe the audio
+    try:
+       # make log-Mel spectrogram and move to the same device as the model
+    
+
+        # You may need to map the detected language code to a human-readable name
+        # detected_language = language_mapping[detected_language] 
+
+       # source_lang_input.set(detected_language)  # Set the source language input to the detected language
+
+
+        result = model.transcribe(WAVE_OUTPUT_FILENAME)
+        text = result["text"]
+        text_input.insert(tk.END, text)
+        log_output.insert(tk.END, "Transcription successful!\n")
+    except Exception as e:
+        print("Sorry, I didn't catch that. Error:", str(e))
+
+
+
 
 def update_labels(language):
     text_label.config(text=language_translations[language]['text'])
@@ -55,6 +129,7 @@ def on_translate_click():
 def reset_fields():
     text_input.delete("1.0", tk.END) # Clear the text input field
     result_label.config(text="") # Clear the result label
+    log_output.delete("1.0", tk.END) # Clear the text input field
 
 
 def swap_languages():
@@ -110,11 +185,22 @@ target_lang_input.grid(column=1, row=4)
 translate_button = ttk.Button(app, command=on_translate_click)
 translate_button.grid(column=1, row=5)
 
+speech_to_text_button = ttk.Button(app, text="Speak", command=on_speech_to_text_click)
+speech_to_text_button.grid(column=0, row=6) # Adjust the row and column as needed
+
+
 blank_label = ttk.Label(app, text="")
 blank_label.grid(column=1, row=6)
 
 result_label = ttk.Label(app, text="", wraplength=200)
 result_label.grid(column=0, row=7, columnspan=3,pady=(0,20))
+
+log_label = ttk.Label(app, text="Log:")
+log_label.grid(column=0, row=8)
+log_output = tk.Text(app, wrap=tk.WORD, height=3)
+log_output.grid(column=0, row=9, columnspan=3)
+
+
 
 # Initialize labels with default language
 update_labels('English')
